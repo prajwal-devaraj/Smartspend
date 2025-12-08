@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body { overflow-x: hidden; }
+
+@layer base {
+  html, body, #root { height: 100%; }
+  body { @apply bg-cream text-gray-900; }
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none; /* IE/Edge */
+  scrollbar-width: none;    /* Firefox */
+}
+
+
+/* Horizontal scroll for Daily Burn chart, no visible scrollbar */
+.scroll-x-chart {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -ms-overflow-style: none;  /* IE/Edge */
+  scrollbar-width: none;     /* Firefox */
+}
+
+.scroll-x-chart::-webkit-scrollbar {
+  display: none;             /* Chrome/Safari */
+}
+
+@layer components {
+  .card { @apply rounded-2xl border border-soft bg-white shadow-card; }
+  .btn-primary { @apply inline-flex items-center justify-center rounded-2xl bg-brand-500 px-4 py-2 font-medium text-white hover:bg-brand-600 transition; }
+  .btn-ghost   { @apply inline-flex items-center justify-center rounded-2xl border border-soft bg-white px-4 py-2 font-medium text-brand-700 hover:bg-brand-50 transition; }
+}
+
+/* tiny animation used in previews (respects reduced motion) */
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }

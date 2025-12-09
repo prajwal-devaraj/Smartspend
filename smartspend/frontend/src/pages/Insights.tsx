@@ -19,19 +19,37 @@ type Summary = {
   total_expense_cents: number
   late_night_count: number
   mood_avgs: { mood: 'happy' | 'neutral' | 'stressed'; avg_amount_cents: number }[]
-  upcoming_bills: { occurrence_id: number; bill_id: number; name: string; amount_cents: number; due_date: string; status: string }[]
+  upcoming_bills: {
+    occurrence_id: number
+    bill_id: number
+    name: string
+    amount_cents: number
+    due_date: string
+    status: string
+  }[]
   runway: { days_left_regular: number; days_left_power_save: number }
 }
-type AlertsResp = { items: Array<{
-  id?: number | string
-  source?: string
-  code?: string
-  title: string
-  message?: string
-  severity?: 'info' | 'warn' | 'success'
-  created_at?: string
-}>}
+
+type AlertsResp = {
+  items: Array<{
+    id?: number | string
+    source?: string
+    code?: string
+    title: string
+    message?: string
+    severity?: 'info' | 'warn' | 'success'
+    created_at?: string
+  }>
+}
+
 type NWGShare = { breakdown: Array<{ class: 'need' | 'want' | 'guilt'; amount_cents: number }> }
+
+type DashboardKpis = {
+  runway: {
+    days_left_regular: number
+    days_left_power_save: number
+  }
+}
 
 // ---- UI helpers/components ----
 const fmtCurrency = (n: number) =>
@@ -44,7 +62,15 @@ const NWG_COLORS: Record<'Need' | 'Want' | 'Guilt', string> = {
   Guilt: '#F1B9A6',
 }
 
-function SectionCard({ title, children, right }: { title: string; children: React.ReactNode; right?: React.ReactNode }) {
+function SectionCard({
+  title,
+  children,
+  right,
+}: {
+  title: string
+  children: React.ReactNode
+  right?: React.ReactNode
+}) {
   return (
     <div className="rounded-2xl border border-soft bg-white shadow-card">
       <div className="flex items-center justify-between border-b border-soft px-4 py-3 md:px-5">
@@ -57,7 +83,13 @@ function SectionCard({ title, children, right }: { title: string; children: Reac
 }
 
 function AlertCard({
-  icon, tone = 'info', title, description, cta, onClick, sparkline
+  icon,
+  tone = 'info',
+  title,
+  description,
+  cta,
+  onClick,
+  sparkline,
 }: {
   icon: React.ReactNode
   tone?: 'info' | 'warn' | 'success'
@@ -67,9 +99,10 @@ function AlertCard({
   onClick?: () => void
   sparkline?: { data: Array<{ x: string; y: number }> }
 }) {
-  const toneCls = tone === 'warn'
-    ? 'bg-amber-50 text-amber-800'
-    : tone === 'success'
+  const toneCls =
+    tone === 'warn'
+      ? 'bg-amber-50 text-amber-800'
+      : tone === 'success'
       ? 'bg-emerald-50 text-emerald-800'
       : 'bg-cream text-gray-800'
 
@@ -101,8 +134,17 @@ function AlertCard({
   )
 }
 
-function Drawer({ open, title, children, onClose }:
-  { open: boolean; title: string; children: React.ReactNode; onClose: () => void }) {
+function Drawer({
+  open,
+  title,
+  children,
+  onClose,
+}: {
+  open: boolean
+  title: string
+  children: React.ReactNode
+  onClose: () => void
+}) {
   if (!open) return null
   return (
     <div className="fixed inset-0 z-40" aria-modal>
@@ -110,7 +152,9 @@ function Drawer({ open, title, children, onClose }:
       <div className="absolute right-0 top-0 h-full w-[min(520px,100%)] overflow-auto bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-soft px-4 py-3">
           <h3 className="text-lg font-semibold">{title}</h3>
-          <button className="rounded-lg p-2 hover:bg-cream" onClick={onClose}><X size={18} /></button>
+          <button className="rounded-lg p-2 hover:bg-cream" onClick={onClose}>
+            <X size={18} />
+          </button>
         </div>
         <div className="p-4">{children}</div>
       </div>
@@ -135,20 +179,29 @@ export default function Insights() {
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState<string>('')
 
+  // Runway (unified with Dashboard KPIs)
+  const [runwayRegular, setRunwayRegular] = useState(0)
+  const [runwayPower, setRunwayPower] = useState(0)
+
   // Drawer (placeholder)
-  const [drawer, setDrawer] = useState<{ open: boolean; title: string; content?: React.ReactNode }>({ open: false, title: '' })
+  const [drawer, setDrawer] = useState<{
+    open: boolean
+    title: string
+    content?: React.ReactNode
+  }>({ open: false, title: '' })
 
   // ML state
   const [ml, setMl] = useState<MlResponse | null>(null)
   const [mlLoading, setMlLoading] = useState(false)
   const [mlErr, setMlErr] = useState<string>('')
 
-  // Load from backend
+  // Load from backend (summary + alerts + nwg share)
   useEffect(() => {
     const user_id = getUserId()
     if (!user_id) return
 
-    setLoading(true); setErr('')
+    setLoading(true)
+    setErr('')
     Promise.all([
       get<Summary>('/insights/summary', { user_id, days }),
       get<AlertsResp>('/insights/alerts', { user_id, days }),
@@ -163,26 +216,38 @@ export default function Insights() {
       .finally(() => setLoading(false))
   }, [days])
 
-  // Derived UI values — clamp REGULAR to 30d for a month-oriented app
-  const runwayRegularRaw = summary?.runway.days_left_regular ?? 0
-  const runwayPowerRaw   = summary?.runway.days_left_power_save ?? 0
-  const runwayRegular = Math.min(runwayRegularRaw, 30)
-  const runwayPower   = runwayPowerRaw
+  // Load runway from the same source as Dashboard
+  useEffect(() => {
+    const user_id = getUserId()
+    if (!user_id) return
+
+    get<DashboardKpis>('/dashboard/kpis', { user_id })
+      .then((res) => {
+        setRunwayRegular(res.runway.days_left_regular || 0)
+        setRunwayPower(res.runway.days_left_power_save || 0)
+      })
+      .catch(() => {
+        setRunwayRegular(0)
+        setRunwayPower(0)
+      })
+  }, [])
 
   // NWG pie from backend cents
   const nwgPie = useMemo(() => {
-    const map: Record<'need'|'want'|'guilt', number> = { need: 0, want: 0, guilt: 0 }
-    nwgShare.forEach(b => { map[b.class] = centsTo(b.amount_cents) })
+    const map: Record<'need' | 'want' | 'guilt', number> = { need: 0, want: 0, guilt: 0 }
+    nwgShare.forEach((b) => {
+      map[b.class] = centsTo(b.amount_cents)
+    })
     return [
-      { name: 'Need',  value: map.need },
-      { name: 'Want',  value: map.want },
+      { name: 'Need', value: map.need },
+      { name: 'Want', value: map.want },
       { name: 'Guilt', value: map.guilt },
     ]
   }, [nwgShare])
 
   // Mood vs avg spend (convert to dollars)
   const moodBar = useMemo(() => {
-    return (summary?.mood_avgs || []).map(m => ({
+    return (summary?.mood_avgs || []).map((m) => ({
       mood: m.mood,
       avg: centsTo(m.avg_amount_cents),
     }))
@@ -191,12 +256,18 @@ export default function Insights() {
   // Transform backend alerts to UI cards
   const alertCards = useMemo(() => {
     return alerts.map((it, i) => {
-      const tone = it.severity === 'warn' ? 'warn' : it.severity === 'success' ? 'success' : 'info'
+      const tone =
+        it.severity === 'warn' ? 'warn' : it.severity === 'success' ? 'success' : 'info'
       const icon =
-        it.code?.includes('bill') ? <CalendarDays size={18}/> :
-        it.code?.includes('late') ? <Moon size={18}/> :
-        it.code?.includes('wants') ? <PieChart size={18}/> :
-        <Sparkles size={18}/>
+        it.code?.includes('bill') ? (
+          <CalendarDays size={18} />
+        ) : it.code?.includes('late') ? (
+          <Moon size={18} />
+        ) : it.code?.includes('wants') ? (
+          <PieChart size={18} />
+        ) : (
+          <Sparkles size={18} />
+        )
       return {
         id: it.id ?? i,
         title: it.title,
@@ -207,7 +278,7 @@ export default function Insights() {
     })
   }, [alerts])
 
-  // ---- ML: run prediction based on summary + NWG ----
+  // ---- ML: run prediction based on summary + NWG + unified runway ----
   useEffect(() => {
     if (!summary) return
 
@@ -215,21 +286,18 @@ export default function Insights() {
     const wants = centsTo(summary.wants_expense_cents)
     const wantsShare = summary.wants_share
     const lateCount = summary.late_night_count
-    const regular = runwayRegularRaw
-    const power = runwayPowerRaw
 
     const need = nwgPie[0]?.value ?? 0
     const want = nwgPie[1]?.value ?? 0
     const guilt = nwgPie[2]?.value ?? 0
 
-    // TODO: align this with your exact ML feature order.
     const features: number[] = [
       total,
       wants,
       wantsShare,
       lateCount,
-      regular,
-      power,
+      runwayRegular,
+      runwayPower,
       need,
       want,
       guilt,
@@ -241,9 +309,9 @@ export default function Insights() {
     setMlErr('')
     predictFromFeatures(features)
       .then(setMl)
-      .catch(e => setMlErr(e.message || 'ML prediction failed'))
+      .catch((e) => setMlErr(e.message || 'ML prediction failed'))
       .finally(() => setMlLoading(false))
-  }, [summary, nwgPie, runwayRegularRaw, runwayPowerRaw, days])
+  }, [summary, nwgPie, runwayRegular, runwayPower, days])
 
   return (
     <AppLayout>
@@ -252,18 +320,32 @@ export default function Insights() {
         <h1 className="text-xl font-semibold">Alerts & Insights</h1>
         <div className="flex gap-2">
           <button
-            className={`rounded-xl border px-3 py-1.5 text-sm ${range==='7d'?'border-brand-500 bg-brand-50 text-brand-700':'border-soft bg-white hover:bg-cream'}`}
+            className={`rounded-xl border px-3 py-1.5 text-sm ${
+              range === '7d'
+                ? 'border-brand-500 bg-brand-50 text-brand-700'
+                : 'border-soft bg-white hover:bg-cream'
+            }`}
             onClick={() => setRange('7d')}
-          >Last 7 days</button>
+          >
+            Last 7 days
+          </button>
           <button
-            className={`rounded-xl border px-3 py-1.5 text-sm ${range==='30d'?'border-brand-500 bg-brand-50 text-brand-700':'border-soft bg-white hover:bg-cream'}`}
+            className={`rounded-xl border px-3 py-1.5 text-sm ${
+              range === '30d'
+                ? 'border-brand-500 bg-brand-50 text-brand-700'
+                : 'border-soft bg-white hover:bg-cream'
+            }`}
             onClick={() => setRange('30d')}
-          >Last 30 days</button>
+          >
+            Last 30 days
+          </button>
         </div>
       </div>
 
       <div className="mx-auto max-w-[1440px] px-3 sm:px-4">
-        {err && <div className="mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">{err}</div>}
+        {err && (
+          <div className="mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">{err}</div>
+        )}
 
         {/* A. Alerts feed */}
         <SectionCard
@@ -271,7 +353,7 @@ export default function Insights() {
           right={<span className="text-xs text-gray-600">{alertCards.length} items</span>}
         >
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {alertCards.map(a => (
+            {alertCards.map((a) => (
               <AlertCard
                 key={String(a.id)}
                 icon={a.icon}
@@ -280,7 +362,7 @@ export default function Insights() {
                 description={a.desc}
               />
             ))}
-            {(!loading && alertCards.length === 0) && (
+            {!loading && alertCards.length === 0 && (
               <div className="rounded-xl border border-soft bg-cream p-6 text-center text-gray-600">
                 No insights yet. Start logging expenses and moods for personalized advice.
               </div>
@@ -295,14 +377,21 @@ export default function Insights() {
             <div className="grid grid-cols-2 gap-4">
               <div className="rounded-xl border border-soft p-4 text-center">
                 <div className="text-sm text-gray-600">Regular</div>
-                <div className="mt-1 text-3xl font-semibold">{loading ? '—' : `${runwayRegular}d`}</div>
+                <div className="mt-1 text-3xl font-semibold">
+                  {loading ? '—' : `${runwayRegular}d`}
+                </div>
               </div>
               <div className="rounded-xl border border-soft p-4 text-center">
                 <div className="text-sm text-gray-600">Power-Save</div>
-                <div className="mt-1 text-3xl font-semibold text-emerald-600">{loading ? '—' : `${runwayPower}d`}</div>
+                <div className="mt-1 text-3xl font-semibold text-emerald-600">
+                  {loading ? '—' : `${runwayPower}d`}
+                </div>
               </div>
             </div>
-            <button className="btn-ghost mt-3 inline-flex items-center gap-2" onClick={() => nav('/dashboard')}>
+            <button
+              className="btn-ghost mt-3 inline-flex items-center gap-2"
+              onClick={() => nav('/dashboard')}
+            >
               <Sparkles size={16} /> Try Power-Save on Dashboard
             </button>
           </SectionCard>
@@ -313,7 +402,12 @@ export default function Insights() {
               <ResponsiveContainer>
                 <RPieChart>
                   <Pie dataKey="value" data={nwgPie} outerRadius={100} innerRadius={60}>
-                    {nwgPie.map((p, i) => <Cell key={i} fill={NWG_COLORS[p.name as 'Need'|'Want'|'Guilt']} />)}
+                    {nwgPie.map((p, i) => (
+                      <Cell
+                        key={i}
+                        fill={NWG_COLORS[p.name as 'Need' | 'Want' | 'Guilt']}
+                      />
+                    ))}
                   </Pie>
                   <Tooltip formatter={(v: number, n: string) => [fmtCurrency(v), n]} />
                 </RPieChart>
@@ -342,13 +436,13 @@ export default function Insights() {
 
         {/* C. ML risk & runway */}
         <div className="mt-3">
-          <SectionCard title="AI Risk & Runway">
+          <SectionCard title="Risk & Runway">
             {mlLoading && <div className="text-sm text-gray-600">Running prediction…</div>}
             {mlErr && <div className="text-sm text-red-600">{mlErr}</div>}
             {ml && !mlLoading && !mlErr && (
               <div className="grid gap-4 md:grid-cols-2 text-sm">
                 <div>
-                  <div className="text-xs text-gray-600 mb-1">Model-estimated runway</div>
+                  <div className="mb-1 text-xs text-gray-600">Model-estimated runway</div>
                   <div className="text-2xl font-semibold">
                     {ml.tier2.runway_days.toFixed(1)} days
                   </div>
@@ -357,11 +451,22 @@ export default function Insights() {
                   </div>
                 </div>
                 <div>
-                  <div className="text-xs text-gray-600 mb-1">Behavior risks (0–100%)</div>
+                  <div className="mb-1 text-xs text-gray-600">
+                    Behavior risks (0–100%)
+                  </div>
                   <ul className="space-y-1">
-                    <li>Late-night spending: {(ml.tier3.risk_late_night * 100).toFixed(1)}%</li>
-                    <li>Overspending: {(ml.tier3.risk_overspend * 100).toFixed(1)}%</li>
-                    <li>Guilt-driven spend: {(ml.tier3.risk_guilt * 100).toFixed(1)}%</li>
+                    <li>
+                      Late-night spending:{' '}
+                      {(ml.tier3.risk_late_night * 100).toFixed(1)}%
+                    </li>
+                    <li>
+                      Overspending:{' '}
+                      {(ml.tier3.risk_overspend * 100).toFixed(1)}%
+                    </li>
+                    <li>
+                      Guilt-driven spend:{' '}
+                      {(ml.tier3.risk_guilt * 100).toFixed(1)}%
+                    </li>
                   </ul>
                 </div>
               </div>
@@ -376,7 +481,9 @@ export default function Insights() {
         title={drawer.title}
         onClose={() => setDrawer({ open: false, title: '' })}
       >
-        {drawer.content ?? <div className="text-gray-600">Details coming soon.</div>}
+        {drawer.content ?? (
+          <div className="text-gray-600">Details coming soon.</div>
+        )}
       </Drawer>
     </AppLayout>
   )

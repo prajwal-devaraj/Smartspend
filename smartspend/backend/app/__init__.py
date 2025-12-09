@@ -1,4 +1,3 @@
-# app/__init__.py
 from flask import Flask, jsonify
 from .config import Config
 from .extensions import db, cors
@@ -35,14 +34,12 @@ def create_app():
 
     db.init_app(app)
 
-    # ✅ CORS for Vite dev server
     cors.init_app(
         app,
         resources={r"/api/*": {"origins": "*"}},
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "Authorization"],
     )
-
 
     register_blueprints(app)
     register_error_handlers(app)

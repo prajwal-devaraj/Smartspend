@@ -1,0 +1,14 @@
+{
+    "moods": [
+        "happy",
+        "sad",
+        "angry",
+        "stressed",
+        "neutral"
+    ],
+    "categories": [
+        "needs",
+        "wants",
+        "guilt"
+    ]
+}
